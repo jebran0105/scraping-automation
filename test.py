@@ -1,29 +1,89 @@
 import asyncio
-import os
 import random
 from pathlib import Path
 
 from patchright.async_api import async_playwright
 
 
-# Persistent profile dir so Imperva's incap_ses_* / visid_incap_* cookies
-# survive between runs once we've passed the initial JS challenge.
 PROFILE_DIR = Path(__file__).parent / ".chrome-profile"
 PROFILE_DIR.mkdir(exist_ok=True)
 
 
+# Anti-fingerprint init script. Runs in every page/frame BEFORE any site JS,
+# so Imperva's detection code reads the spoofed values instead of the
+# VM-shaped ones (WARP renderer, deviceMemory=16, etc.).
+FINGERPRINT_SPOOF_JS = r"""
+(() => {
+    // Pretend to be a stock Windows desktop with Intel UHD Graphics 630.
+    // This is the single most common Windows GPU fingerprint, so spoofing
+    // to it blends into the largest cluster of real users.
+    const VENDOR   = 'Google Inc. (Intel)';
+    const RENDERER = 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E92) Direct3D11 vs_5_0 ps_5_0, D3D11)';
+
+    const UNMASKED_VENDOR_WEBGL   = 0x9245;
+    const UNMASKED_RENDERER_WEBGL = 0x9246;
+    const MAX_TEXTURE_SIZE        = 0x0D33;
+
+    const patchGetParameter = (proto) => {
+        if (!proto || !proto.getParameter) return;
+        const orig = proto.getParameter;
+        proto.getParameter = function (param) {
+            if (param === UNMASKED_VENDOR_WEBGL)   return VENDOR;
+            if (param === UNMASKED_RENDERER_WEBGL) return RENDERER;
+            // Real Intel UHD reports 16384; WARP reports 8192.
+            if (param === MAX_TEXTURE_SIZE)        return 16384;
+            return orig.call(this, param);
+        };
+    };
+    if (typeof WebGLRenderingContext  !== 'undefined') patchGetParameter(WebGLRenderingContext.prototype);
+    if (typeof WebGL2RenderingContext !== 'undefined') patchGetParameter(WebGL2RenderingContext.prototype);
+
+    // Canvas pixel-noise injection. Imperva renders a known shape and hashes
+    // the resulting pixels. WARP's software rasterizer produces a distinctive
+    // hash; perturbing one bit in every 1024th byte breaks the hash without
+    // being humanly visible, and changes the result from run to run.
+    const noisePixels = (data) => {
+        for (let i = 0; i < data.length; i += 1024) data[i] ^= 1;
+    };
+    const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function (...args) {
+        try {
+            const ctx = this.getContext('2d');
+            if (ctx && this.width && this.height) {
+                const img = ctx.getImageData(0, 0, this.width, this.height);
+                noisePixels(img.data);
+                ctx.putImageData(img, 0, 0);
+            }
+        } catch (e) {}
+        return origToDataURL.apply(this, args);
+    };
+    const origGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+    CanvasRenderingContext2D.prototype.getImageData = function (...args) {
+        const out = origGetImageData.apply(this, args);
+        noisePixels(out.data);
+        return out;
+    };
+
+    // The VM reports navigator.deviceMemory=16, but the W3C spec caps it
+    // at 8. A non-spec value is itself a bot tell — clamp it back.
+    try {
+        Object.defineProperty(Navigator.prototype, 'deviceMemory', {
+            get: () => 8, configurable: true,
+        });
+    } catch (e) {}
+
+    // Lift hardwareConcurrency from 4 (VM-typical) to 8 (desktop-typical).
+    try {
+        Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', {
+            get: () => 8, configurable: true,
+        });
+    } catch (e) {}
+})();
+"""
+
+
 async def check_property_tax():
     async with async_playwright() as p:
-        # Key choices for beating Imperva (Error 15):
-        # 1. launch_persistent_context (NOT launch + new_context) — patchright's
-        #    stealth patches only kick in fully on persistent contexts.
-        # 2. channel="chrome" — use the real Google Chrome binary, not bundled
-        #    Chromium. Imperva fingerprints chrome.app / chrome.csi /
-        #    chrome.loadTimes, and bundled Chromium has visible gaps.
-        # 3. NO --no-sandbox, NO --disable-blink-features=AutomationControlled,
-        #    NO --disable-web-security. These are all detection signals.
-        # 4. headless=False until we confirm the site lets us in; many sites
-        #    fingerprint the headless shell separately even with stealth.
         context = await p.chromium.launch_persistent_context(
             user_data_dir=str(PROFILE_DIR),
             channel="chrome",
@@ -39,15 +99,30 @@ async def check_property_tax():
             ],
         )
 
+        # Apply spoof BEFORE any navigation so it covers every page/frame.
+        await context.add_init_script(FINGERPRINT_SPOOF_JS)
+
         page = context.pages[0] if context.pages else await context.new_page()
 
-        # Warm up with a "normal" referrer page first. Hitting the target
-        # cold from about:blank is itself a signal — a real user usually
-        # arrives via a search engine or the parent county site.
+        # Sanity check: verify the spoof is active by dumping fingerprint
+        # on about:blank before we hit the target. Compare to the previous
+        # VM dump — webgl renderer should now claim Intel UHD, not WARP.
+        await page.goto("about:blank")
+        fp = await page.evaluate("""() => ({
+            cores: navigator.hardwareConcurrency,
+            mem:   navigator.deviceMemory,
+            webgl: (() => {
+                const c = document.createElement('canvas').getContext('webgl');
+                const d = c && c.getExtension('WEBGL_debug_renderer_info');
+                return d ? [c.getParameter(d.UNMASKED_VENDOR_WEBGL),
+                            c.getParameter(d.UNMASKED_RENDERER_WEBGL)] : null;
+            })(),
+        })""")
+        print(f"Spoofed fingerprint: {fp}")
+
         await page.goto("https://ttc.lacounty.gov/", wait_until="domcontentloaded")
         await page.wait_for_timeout(2000 + int(random.random() * 2000))
 
-        # Some human-ish mouse motion
         await page.mouse.move(
             200 + random.random() * 300,
             300 + random.random() * 200,
@@ -55,12 +130,10 @@ async def check_property_tax():
         )
         await page.wait_for_timeout(400 + int(random.random() * 600))
 
-        # Now navigate to the actual target.
         response = await page.goto(
             "https://vcheck.ttc.lacounty.gov/",
             wait_until="domcontentloaded",
         )
-        # Give Imperva's JS challenge time to run and set its session cookies.
         await page.wait_for_timeout(5000 + int(random.random() * 3000))
 
         try:
@@ -68,14 +141,11 @@ async def check_property_tax():
         except Exception:
             pass
 
-        # Save the landing state so we can see what came back.
         await page.screenshot(path="result.png", full_page=True)
         print(f"Status: {response.status if response else 'no response'}")
         print(f"Current URL: {page.url}")
         print(f"Title: {await page.title()}")
 
-        # If we got blocked again, bail out with the cookies dumped so we
-        # can inspect what (if any) Imperva tokens were set.
         if "404.html" in page.url or "vchecktst" in page.url:
             cookies = await context.cookies()
             print("\n=== STILL BLOCKED ===")
@@ -85,7 +155,6 @@ async def check_property_tax():
             await context.close()
             return
 
-        # We're past the challenge — proceed with the real flow.
         submit_btn = page.locator("#next")
         await submit_btn.wait_for(state="visible", timeout=10000)
         await submit_btn.scroll_into_view_if_needed()
@@ -95,23 +164,6 @@ async def check_property_tax():
         await page.wait_for_timeout(8000)
         await page.screenshot(path="result.png", full_page=True)
         print(f"After click URL: {page.url}")
-
-        fp = await page.evaluate("""() => ({
-            ua: navigator.userAgent,
-            platform: navigator.platform,
-            cores: navigator.hardwareConcurrency,
-            mem: navigator.deviceMemory,
-            screen: [screen.width, screen.height],
-            inner: [innerWidth, innerHeight],
-            webgl: (() => {
-                const c = document.createElement('canvas').getContext('webgl');
-                const d = c && c.getExtension('WEBGL_debug_renderer_info');
-                return d ? [c.getParameter(d.UNMASKED_VENDOR_WEBGL), c.getParameter(d.UNMASKED_RENDERER_WEBGL)] : null;
-            })(),
-            tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            langs: navigator.languages,
-        })""")
-        print(fp)
 
         await context.close()
 
