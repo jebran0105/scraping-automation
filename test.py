@@ -96,6 +96,23 @@ async def check_property_tax():
         await page.screenshot(path="result.png", full_page=True)
         print(f"After click URL: {page.url}")
 
+        fp = await page.evaluate("""() => ({
+            ua: navigator.userAgent,
+            platform: navigator.platform,
+            cores: navigator.hardwareConcurrency,
+            mem: navigator.deviceMemory,
+            screen: [screen.width, screen.height],
+            inner: [innerWidth, innerHeight],
+            webgl: (() => {
+                const c = document.createElement('canvas').getContext('webgl');
+                const d = c && c.getExtension('WEBGL_debug_renderer_info');
+                return d ? [c.getParameter(d.UNMASKED_VENDOR_WEBGL), c.getParameter(d.UNMASKED_RENDERER_WEBGL)] : null;
+            })(),
+            tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            langs: navigator.languages,
+        })""")
+        print(fp)
+
         await context.close()
 
 
