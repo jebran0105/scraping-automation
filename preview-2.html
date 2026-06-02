@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property Tax Intelligence Platform - Core Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0f1520;
+    --surface2: #141d2e;
+    --surface3: #192337;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #7fff6b;
+    --purple: #b482ff;
+    --text: #e8edf5;
+    --muted: #5a6a82;
+    --soft: #9baabf;
+    --border: rgba(0,229,255,0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .page {
+    min-height: 100vh;
+    position: relative;
+    padding: 42px 64px 44px;
+    overflow: hidden;
+  }
+
+  .grid-overlay {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  .glow-a, .glow-b {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    filter: blur(4px);
+  }
+  .glow-a {
+    top: -220px;
+    right: -180px;
+    width: 620px;
+    height: 620px;
+    background: radial-gradient(circle, rgba(0,229,255,0.07) 0%, transparent 68%);
+  }
+  .glow-b {
+    bottom: -160px;
+    left: -160px;
+    width: 440px;
+    height: 440px;
+    background: radial-gradient(circle, rgba(255,107,53,0.05) 0%, transparent 70%);
+  }
+
+  .header {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 32px;
+    margin-bottom: 30px;
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(34px, 4.4vw, 62px);
+    font-weight: 900;
+    line-height: 1.02;
+    letter-spacing: -1px;
+  }
+
+  .hl { color: var(--accent); }
+
+  .subtitle {
+    max-width: 650px;
+    margin-top: 14px;
+    color: var(--soft);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .hint-card {
+    flex: 0 0 320px;
+    background: rgba(15,21,32,0.82);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    backdrop-filter: blur(10px);
+  }
+
+  .hint-card .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .hint-card p {
+    color: var(--soft);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .layout {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(560px, 1.12fr) minmax(420px, 0.88fr);
+    gap: 28px;
+    align-items: stretch;
+  }
+
+  .architecture-card, .detail-panel {
+    background: rgba(15,21,32,0.82);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.25);
+    backdrop-filter: blur(10px);
+  }
+
+  .architecture-card { padding: 26px; }
+
+  .arch-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .arch-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    min-height: 66px;
+  }
+
+  .arch-label {
+    width: 138px;
+    flex-shrink: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 16px;
+    border-right: 1px solid var(--border);
+  }
+
+  .arch-connector {
+    width: 138px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .arch-cell {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    padding: 11px 10px;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    user-select: none;
+    min-width: 0;
+  }
+
+  .arch-cell span {
+    font-size: 9px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.7px;
+    font-weight: 400;
+    line-height: 1.35;
+  }
+
+  .arch-cell:hover, .arch-cell.active {
+    transform: translateY(-2px);
+    background: rgba(0,229,255,0.055);
+    box-shadow: 0 0 0 1px rgba(0,229,255,0.18), 0 14px 32px rgba(0,0,0,0.22);
+  }
+
+  .arch-cell.c1 { border-color: rgba(0,229,255,0.3); color: var(--accent); }
+  .arch-cell.c2 { border-color: rgba(255,107,53,0.34); color: var(--accent2); }
+  .arch-cell.c3 { border-color: rgba(127,255,107,0.32); color: var(--accent3); }
+  .arch-cell.c4 { border-color: rgba(180,130,255,0.34); color: var(--purple); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+  }
+
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .d1 { background: var(--accent); }
+  .d2 { background: var(--accent2); }
+  .d3 { background: var(--accent3); }
+  .d4 { background: var(--purple); }
+
+  .detail-panel {
+    padding: 24px;
+    min-height: 550px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .detail-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+
+  .panel-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .mode-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid rgba(0,229,255,0.12);
+    border-radius: 999px;
+    background: rgba(6,10,15,0.38);
+  }
+
+  .mode-tab {
+    border: none;
+    border-radius: 999px;
+    padding: 8px 11px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+
+  .mode-tab.active {
+    color: var(--accent);
+    background: rgba(0,229,255,0.09);
+  }
+
+  .detail-kicker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2.8px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .detail-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .detail-subtitle {
+    color: var(--soft);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+  }
+
+  .detail-section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0,229,255,0.1);
+  }
+
+  .detail-section h3 {
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text);
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+
+  .detail-section ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .detail-section li {
+    color: var(--soft);
+    font-size: 13.5px;
+    line-height: 1.52;
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+  }
+
+  .detail-section li::before {
+    content: '→';
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    flex-shrink: 0;
+  }
+
+  .stack-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.18);
+    border-radius: 999px;
+    padding: 6px 10px;
+  }
+
+  .flow-panel { display: none; }
+  .detail-panel.flow-mode .detail-content { display: none; }
+  .detail-panel.flow-mode .flow-panel { display: block; }
+
+  .flow-note {
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    line-height: 1.55;
+    letter-spacing: 0.4px;
+    margin: 8px 0 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(0,229,255,0.045);
+    border: 1px solid rgba(0,229,255,0.1);
+  }
+
+  .flow-card {
+    background: rgba(6,10,15,0.58);
+    border: 1px solid rgba(0,229,255,0.12);
+    border-radius: 15px;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .mermaid-wrap {
+    width: 100%;
+    max-height: 585px;
+    overflow: auto;
+  }
+
+  .mermaid-wrap svg {
+    max-width: none;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .mermaid-fallback {
+    color: var(--soft);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    display: none;
+  }
+
+  .footer-note {
+    position: relative;
+    z-index: 2;
+    margin-top: 20px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+  }
+
+
+
+  .global-tabs {
+    position: relative;
+    z-index: 5;
+    display: inline-flex;
+    gap: 8px;
+    padding: 5px;
+    border: 1px solid rgba(0,229,255,0.13);
+    border-radius: 999px;
+    background: rgba(6,10,15,0.68);
+    backdrop-filter: blur(12px);
+    margin-bottom: 22px;
+  }
+
+  .view-tab {
+    border: none;
+    border-radius: 999px;
+    padding: 10px 15px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .view-tab.active {
+    color: var(--accent);
+    background: rgba(0,229,255,0.1);
+    box-shadow: inset 0 0 0 1px rgba(0,229,255,0.08);
+  }
+
+  .flow-page {
+    display: none;
+    position: relative;
+    z-index: 2;
+    min-height: calc(100vh - 128px);
+  }
+
+  .page.flow-active .header,
+  .page.flow-active .layout,
+  .page.flow-active .footer-note {
+    display: none;
+  }
+
+  .page.flow-active .flow-page {
+    display: block;
+  }
+
+  .flow-full-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 18px;
+  }
+
+  .flow-full-title h1 {
+    font-size: clamp(30px, 3.8vw, 52px);
+  }
+
+  .flow-full-title p {
+    color: var(--soft);
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 840px;
+    margin-top: 10px;
+  }
+
+  .flow-legend {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    max-width: 420px;
+  }
+
+  .flow-legend span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--soft);
+    padding: 6px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,229,255,0.12);
+    background: rgba(15,21,32,0.64);
+  }
+
+  .flow-full-card {
+    background: rgba(15,21,32,0.82);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.25);
+    backdrop-filter: blur(10px);
+    padding: 18px;
+    min-height: calc(100vh - 260px);
+  }
+
+  .flow-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 0 2px 12px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+  }
+
+  .flow-toolbar strong {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .mermaid-full-wrap {
+    width: 100%;
+    height: calc(100vh - 315px);
+    min-height: 560px;
+    overflow: auto;
+    background: rgba(6,10,15,0.42);
+    border: 1px solid rgba(0,229,255,0.1);
+    border-radius: 14px;
+    padding: 20px;
+  }
+
+  .mermaid-full-wrap svg {
+    max-width: none !important;
+    width: 1650px !important;
+    height: auto !important;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .flow-fallback-full {
+    display: none;
+    white-space: pre-wrap;
+    color: var(--soft);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 1120px) {
+    .flow-full-head { flex-direction: column; align-items: flex-start; }
+    .flow-legend { justify-content: flex-start; max-width: none; }
+    .mermaid-full-wrap svg { width: 1450px !important; }
+  }
+
+  @media (max-width: 1120px) {
+    .page { padding: 32px 26px; }
+    .header { flex-direction: column; }
+    .hint-card { flex: none; width: 100%; }
+    .layout { grid-template-columns: 1fr; }
+    .detail-panel { min-height: auto; }
+    .mermaid-wrap { max-height: 650px; }
+  }
+
+  @media (max-width: 760px) {
+    .arch-row { flex-direction: column; min-height: auto; }
+    .arch-label, .arch-connector { width: 100%; justify-content: flex-start; border-right: none; padding-right: 0; }
+    .arch-connector { display: none; }
+    .panel-topbar { align-items: flex-start; flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-overlay"></div>
+<div class="glow-a"></div>
+<div class="glow-b"></div>
+
+<main class="page" id="page">
+  <nav class="global-tabs" aria-label="Main view selector">
+    <button class="view-tab active" id="architectureViewBtn" type="button">Architecture</button>
+    <button class="view-tab" id="fullFlowViewBtn" type="button">Full Flow</button>
+  </nav>
+  <section class="header">
+    <div>
+      <div class="eyebrow">Core Architecture</div>
+      <h1>How It All <span class="hl">Fits Together</span></h1>
+      <p class="subtitle">
+        A focused architecture view of the stack and intake patterns: scheduled bulk runs, on-demand single-parcel lookups, and on-demand multi-parcel requests all flow through the same controlled execution pipeline.
+      </p>
+    </div>
+    <aside class="hint-card">
+      <div class="label">Interactive View</div>
+      <p>Click any architecture block for its role. Use the Full Flow tab above to hide the panels and view one large end-to-end Mermaid flow including LangGraph orchestration.</p>
+    </aside>
+  </section>
+
+
+
+  <section class="flow-page" id="flowPage">
+    <div class="flow-full-head">
+      <div class="flow-full-title">
+        <div class="eyebrow">End-to-End Flow</div>
+        <h1>Request to Result <span class="hl">Flow</span></h1>
+        <p>
+          This full-canvas view shows how scheduled bulk jobs, on-demand single lookups, and on-demand multi-parcel requests enter the same stack. It also shows where FastAPI creates parent and child jobs, how Redis controls execution, and how LangGraph orchestrates the parcel-level automation loop.
+        </p>
+      </div>
+      <div class="flow-legend" aria-label="Flow legend">
+        <span>Intake modes</span>
+        <span>Parent / child jobs</span>
+        <span>Redis queue control</span>
+        <span>LangGraph loop</span>
+        <span>Human review</span>
+      </div>
+    </div>
+
+    <div class="flow-full-card">
+      <div class="flow-toolbar">
+        <div><strong>Full flow mode</strong> · Architecture panels are hidden so the diagram has the full canvas.</div>
+        <div>Scroll horizontally / vertically if needed</div>
+      </div>
+      <div class="mermaid-full-wrap" id="mermaidFullWrap"></div>
+      <pre class="flow-fallback-full" id="flowFallbackFull"></pre>
+    </div>
+  </section>
+
+  <section class="layout">
+    <div class="architecture-card">
+      <div class="arch-stack">
+        <div class="arch-row">
+          <div class="arch-label">Intake Modes</div>
+          <div class="arch-cell c1" data-node="scheduledBulk">Scheduled Bulk Job<span>APScheduler · many parcels</span></div>
+          <div class="arch-cell c1" data-node="onDemandSingle">On-demand Single Job<span>1 request → 1 parcel job</span></div>
+          <div class="arch-cell c1" data-node="onDemandMultiple">On-demand Multiple Parcels<span>1 request → N parcel jobs</span></div>
+        </div>
+        <div class="arch-row" style="min-height:24px;">
+          <div class="arch-connector">↓</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;">↓</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-label">Application</div>
+          <div class="arch-cell c1 active" style="flex:2.2;" data-node="fastapi">FastAPI<span>Request intake · validation · fan-out · status APIs</span></div>
+        </div>
+        <div class="arch-row" style="min-height:24px;">
+          <div class="arch-connector">↓</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;">↓</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-label">Queue</div>
+          <div class="arch-cell c2" style="flex:2.2;" data-node="redis">Redis + ARQ<span>Parcel job queue · priority · rate limit · interleave</span></div>
+        </div>
+        <div class="arch-row" style="min-height:24px;">
+          <div class="arch-connector">↓</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;">↓</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-label">Orchestration</div>
+          <div class="arch-cell c1" style="flex:2.2;" data-node="langgraph">LangGraph<span>State · checkpointing · routing · human interrupt</span></div>
+        </div>
+        <div class="arch-row" style="min-height:24px;">
+          <div class="arch-connector">↓</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;">↓</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-label">Execution</div>
+          <div class="arch-cell c3" style="flex:2.2;" data-node="pydoll">pydoll + LLM<span>Stealth browser · AI navigation · extraction</span></div>
+        </div>
+        <div class="arch-row" style="min-height:24px;">
+          <div class="arch-connector">↓</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;">↓</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-label">Output</div>
+          <div class="arch-cell c3" data-node="postgres">Postgres<span>Results · requests · jobs · audit</span></div>
+          <div class="arch-cell c4" data-node="ops">Ops Dashboard<span>Human review queue</span></div>
+          <div class="arch-cell c1" data-node="frontend">Frontend<span>Property mgmt UI</span></div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="dot d1"></i> Application / orchestration</span>
+        <span><i class="dot d2"></i> Queue control</span>
+        <span><i class="dot d3"></i> Execution / data</span>
+        <span><i class="dot d4"></i> Human review</span>
+      </div>
+    </div>
+
+    <aside class="detail-panel" id="detailPanel">
+      <div class="panel-topbar">
+        <div class="detail-kicker" id="detailKicker">Application Layer</div>
+        <div class="mode-tabs" role="tablist" aria-label="Side panel mode">
+          <button class="mode-tab active" id="detailsTab" type="button">Details</button>
+        </div>
+      </div>
+
+      <div class="detail-content">
+        <h2 class="detail-title" id="detailTitle">FastAPI</h2>
+        <p class="detail-subtitle" id="detailSubtitle">Creates and exposes lookup jobs through clean backend APIs.</p>
+        <div class="stack-pill-row" id="detailPills"></div>
+
+        <div class="detail-section">
+          <h3>How it works</h3>
+          <ul id="howList"></ul>
+        </div>
+
+        <div class="detail-section">
+          <h3>Why we need it</h3>
+          <ul id="whyList"></ul>
+        </div>
+      </div>
+
+      <div class="flow-panel">
+        <h2 class="detail-title">End-to-End Request Flow</h2>
+        <p class="detail-subtitle">One clean example showing how intake, parent-child jobs, Redis, Workers, LangGraph, pydoll + LLM, Postgres, Ops, and the Frontend fit together.</p>
+        <div class="flow-note">
+          This flow covers all three intake modes. The parent-child link is created in FastAPI before jobs enter Redis. LangGraph then runs a stateful workflow for each parcel-level child job.
+        </div>
+        <div class="flow-card">
+          <div class="mermaid-wrap" id="mermaidWrap"></div>
+          <pre class="mermaid-fallback" id="mermaidFallback"></pre>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <div class="footer-note">Property Tax Intelligence Platform · Core stack view · Toggle the side panel between layer details and one end-to-end flow</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  if (window.mermaid) {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',
+      theme: 'base',
+      themeVariables: {
+        background: '#080c10',
+        mainBkg: '#0f1520',
+        secondBkg: '#141d2e',
+        primaryColor: '#0f1520',
+        primaryTextColor: '#e8edf5',
+        primaryBorderColor: '#00e5ff',
+        lineColor: '#00e5ff',
+        secondaryColor: '#141d2e',
+        tertiaryColor: '#192337',
+        fontFamily: 'DM Sans, sans-serif',
+        nodeTextColor: '#e8edf5',
+        clusterBkg: '#0d131d',
+        clusterBorder: 'rgba(0,229,255,0.2)'
+      },
+      flowchart: {
+        curve: 'basis',
+        nodeSpacing: 18,
+        rankSpacing: 28,
+        padding: 8,
+        htmlLabels: true
+      }
+    });
+  }
+
+  const details = {
+    scheduledBulk: {
+      kicker: 'Intake Mode',
+      title: 'Scheduled Bulk Job',
+      subtitle: 'The recurring verification path for quarterly or periodic checks across a large parcel set.',
+      pills: ['APScheduler', 'Batch request', 'Many parcels', 'Low priority'],
+      how: [
+        'APScheduler wakes up on the defined schedule, for example quarterly verification.',
+        'The scheduler creates a bulk parent request that represents the full scheduled run.',
+        'FastAPI expands that parent request into many parcel-level child jobs.',
+        'Those child jobs enter Redis with lower priority than urgent on-demand requests.'
+      ],
+      why: [
+        'Large recurring checks should not require a user to manually start every parcel lookup.',
+        'Bulk jobs must be throttled and interleaved so county websites are not overwhelmed.',
+        'Keeping scheduled jobs in the same pipeline gives one consistent audit trail, status model, and reporting view.'
+      ]
+    },
+    onDemandSingle: {
+      kicker: 'Intake Mode',
+      title: 'On-demand Single Job',
+      subtitle: 'The fast path when a user needs to verify one parcel immediately.',
+      pills: ['Frontend', 'FastAPI', '1 request', '1 parcel job'],
+      how: [
+        'A user submits one parcel ID from the frontend or Ops Dashboard.',
+        'FastAPI validates the request and creates one parent request plus one parcel-level job.',
+        'Redis places that job in the queue with higher priority than scheduled batch work.',
+        'The worker processes it through LangGraph, pydoll, and the LLM, then returns the result to Postgres and the frontend.'
+      ],
+      why: [
+        'Business users need immediate verification without waiting for the next scheduled run.',
+        'The single-parcel path should reuse the same controlled automation stack instead of becoming a separate script.',
+        'One request mapped to one child job keeps progress tracking, retries, and audit history simple.'
+      ]
+    },
+    onDemandMultiple: {
+      kicker: 'Intake Mode',
+      title: 'On-demand Multiple Parcels',
+      subtitle: 'The fan-out path when one user action contains many parcel IDs.',
+      pills: ['Frontend', 'FastAPI fan-out', 'Parent request', 'N child jobs'],
+      how: [
+        'A user submits multiple parcel IDs in one on-demand request.',
+        'FastAPI creates one parent request ID for the business action.',
+        'FastAPI fans out the work into one child parcel job per parcel ID.',
+        'Each child job is queued, rate-limited, retried, and completed independently.',
+        'Postgres rolls child job outcomes back up into one parent progress view such as 37 of 50 complete.'
+      ],
+      why: [
+        'A multi-parcel request should not become one huge fragile job.',
+        'If one parcel fails, only that parcel should go to exception handling; the others should continue.',
+        'This model supports partial completion, per-parcel retry, per-county rate limiting, and clean status reporting.'
+      ]
+    },
+    fastapi: {
+      kicker: 'Application Layer',
+      title: 'FastAPI Backend',
+      subtitle: 'The request-intake boundary that validates work, creates parent requests, fans out parcel jobs, and exposes status APIs.',
+      pills: ['Python', 'FastAPI', 'REST APIs', 'Request fan-out', 'Status APIs'],
+      how: [
+        'Receives scheduled bulk, on-demand single-parcel, and on-demand multi-parcel requests.',
+        'Creates a parent request record for each business action.',
+        'Creates one parcel-level child job for each parcel that needs to be checked.',
+        'Returns a request ID immediately so the frontend can track aggregate progress without waiting for browser automation to finish.',
+        'Provides status and action APIs for retry, resume, exception review, and results display.'
+      ],
+      why: [
+        'It separates user-facing requests from long-running website automation.',
+        'It prevents HTTP requests from hanging while county websites are being navigated.',
+        'It gives the platform one clean integration surface for frontend, scheduler, and Ops Dashboard.',
+        'It creates the parent-child job structure before Redis execution begins.'
+      ]
+    },
+    redis: {
+      kicker: 'Queue & Control Layer',
+      title: 'Redis + ARQ',
+      subtitle: 'The controlled execution layer that queues parcel jobs, prioritizes urgent work, and protects county websites from overload.',
+      pills: ['Redis', 'ARQ', 'Priority queue', 'Per-site limits', 'Interleaving'],
+      how: [
+        'Receives parcel-level child jobs from FastAPI.',
+        'Prioritizes on-demand jobs ahead of scheduled bulk jobs.',
+        'Applies per-county-site rate limits to avoid bot detection or blocking.',
+        'Interleaves jobs across county websites instead of hammering one website repeatedly.',
+        'Feeds ready jobs to the worker pool asynchronously.'
+      ],
+      why: [
+        'Website automation should not run inside the user request thread.',
+        'Some county websites carry more volume and need stricter throttling.',
+        'Redis lets the system scale workers while still controlling pressure on external websites.',
+        'Queue-level controls make the same pipeline work for scheduled bulk and on-demand requests.'
+      ]
+    },
+    langgraph: {
+      kicker: 'Orchestration Layer',
+      title: 'LangGraph',
+      subtitle: 'The stateful workflow brain for each parcel-level lookup.',
+      pills: ['LangGraph', 'State machine', 'Checkpointing', 'Conditional routing', 'Human interrupt'],
+      how: [
+        'Runs one controlled agent workflow per parcel job.',
+        'Maintains state across multiple website-navigation steps.',
+        'Routes outcomes such as success, retryable failure, CAPTCHA, stuck state, or human review.',
+        'Checkpoints progress so a workflow can resume from the exact step where it stopped.',
+        'Pauses the workflow when automation cannot safely continue and sends the case to the Ops Dashboard.'
+      ],
+      why: [
+        'County website navigation is not a single API call; it is an unknown multi-step loop.',
+        'A plain script becomes fragile when the number of steps varies by website and failure type.',
+        'LangGraph provides controlled branching, recovery, resumability, and human-in-the-loop behavior.',
+        'It prevents the browser automation logic from becoming nested if/else spaghetti.'
+      ]
+    },
+    pydoll: {
+      kicker: 'Execution Layer',
+      title: 'pydoll + LLM',
+      subtitle: 'The browser automation and reasoning layer that performs the actual county website lookup.',
+      pills: ['pydoll', 'LLM', 'Browser automation', 'Screenshots', 'Extraction'],
+      how: [
+        'pydoll opens and controls a stealth browser session for the target county property tax website.',
+        'The LLM reads page context and decides the next action: search, click, enter parcel ID, extract, retry, or escalate.',
+        'The automation captures page state, screenshots, and evidence when the workflow fails or needs human review.',
+        'Extracted property tax data is written back through the controlled LangGraph workflow.'
+      ],
+      why: [
+        'County sites are not standardized; each portal may have different screens, forms, and navigation patterns.',
+        'Traditional scraping is brittle when website layouts change or workflows vary.',
+        'The LLM plus browser approach adapts to different website structures while LangGraph keeps the process controlled.'
+      ]
+    },
+    postgres: {
+      kicker: 'Data Layer',
+      title: 'Postgres',
+      subtitle: 'The durable system of record for requests, parcel jobs, results, checkpoints, and audit history.',
+      pills: ['Postgres', 'Parent requests', 'Parcel jobs', 'Results', 'Audit trail'],
+      how: [
+        'Stores parent request records for scheduled bulk, on-demand single, and on-demand multi-parcel submissions.',
+        'Stores child parcel jobs with status, county site, retry count, and outcome.',
+        'Stores extracted property tax records, timestamps, screenshots, and audit events.',
+        'Stores LangGraph checkpoints so workflows can resume after failure or human intervention.',
+        'Aggregates parcel-level outcomes into request-level progress and management reports.'
+      ],
+      why: [
+        'Management needs visibility into what was checked, when it was checked, and what happened.',
+        'Operations teams need a reliable record of failures, retries, and manual interventions.',
+        'Request-level and parcel-level storage makes multi-parcel progress and partial completion transparent.',
+        'Checkpoint storage prevents failed jobs from restarting from the beginning unnecessarily.'
+      ]
+    },
+    ops: {
+      kicker: 'Human Review Layer',
+      title: 'Ops Dashboard',
+      subtitle: 'The exception-handling layer for parcel jobs that automation cannot safely complete on its own.',
+      pills: ['Human-in-the-loop', 'Exception queue', 'Manual resolution', 'Resume'],
+      how: [
+        'Receives parcel jobs that fail after retries or require human judgment.',
+        'Shows parcel details, county site, screenshots, and action history.',
+        'Allows an operator to resolve, retry, override, or mark a lookup as unable to verify.',
+        'Sends the workflow back to LangGraph to resume from the saved state.'
+      ],
+      why: [
+        'No automation system should silently drop unresolved parcels.',
+        'Human review keeps the process auditable and operationally safe.',
+        'For multi-parcel requests, exceptions are isolated to individual parcel jobs instead of blocking the whole request.'
+      ]
+    },
+    frontend: {
+      kicker: 'Output Layer',
+      title: 'Frontend',
+      subtitle: 'The property management UI for submitting lookups, tracking progress, and viewing results.',
+      pills: ['Property management UI', 'Status view', 'Progress', 'Results', 'Reports'],
+      how: [
+        'Submits single-parcel and multi-parcel on-demand requests to FastAPI.',
+        'Displays request-level progress, such as queued, running, complete, partial, or exception.',
+        'Displays parcel-level status for multi-parcel requests.',
+        'Shows completed tax records, pending jobs, and exceptions requiring review.'
+      ],
+      why: [
+        'Business users need a simple interface, not direct access to automation infrastructure.',
+        'The UI makes the same backend usable for immediate lookups and operational monitoring.',
+        'It gives management visibility into completion, failures, exception volume, and audit evidence.'
+      ]
+    }
+  };
+
+  const endToEndFlow = `flowchart TD
+  subgraph I[Intake]
+    A1[Scheduled bulk run<br/>APScheduler] --> B[FastAPI intake]
+    A2[On-demand single parcel<br/>Frontend / Ops] --> B
+    A3[On-demand multiple parcels<br/>Frontend / Ops] --> B
+  end
+
+  B --> C[(Postgres<br/>create parent request_id)]
+  C --> D{Parcel count}
+  D -->|1 parcel| E[Create one child parcel job]
+  D -->|N parcels| F[Fan-out into N child parcel jobs]
+  E --> G[(Postgres<br/>child job stores request_id)]
+  F --> G
+
+  G --> H[Redis + ARQ<br/>priority + per-site rate limits]
+  H --> J[Worker picks ready child job]
+
+  subgraph L[LangGraph orchestration per child job]
+    J --> K[Load state / checkpoint]
+    K --> M[Observe county page state]
+    M --> N[LLM decides next action]
+    N --> O[pydoll executes browser action]
+    O --> P{Workflow outcome}
+    P -->|continue| M
+    P -->|retryable error| Q[Checkpoint + increment retry]
+    Q --> M
+    P -->|success| R[Extract tax result]
+    P -->|stuck / max retries| S[Human interrupt<br/>save screenshot + state]
+  end
+
+  R --> T[(Postgres<br/>result + audit event)]
+  T --> U[Update child job status]
+  U --> V[Roll up parent progress<br/>complete / partial / exception]
+  V --> W[Frontend + reports<br/>status and verified records]
+
+  S --> X[Ops Dashboard<br/>resolve / retry / override]
+  X -->|resume| K
+  X -->|override| T`;
+
+  const page = document.getElementById('page');
+  const architectureViewBtn = document.getElementById('architectureViewBtn');
+  const fullFlowViewBtn = document.getElementById('fullFlowViewBtn');
+  const mermaidFullWrap = document.getElementById('mermaidFullWrap');
+  const flowFallbackFull = document.getElementById('flowFallbackFull');
+  let fullFlowRendered = false;
+
+  const cells = document.querySelectorAll('.arch-cell');
+  const detailPanel = document.getElementById('detailPanel');
+  const detailsTab = document.getElementById('detailsTab');
+  const flowTab = document.getElementById('flowTab');
+  const detailKicker = document.getElementById('detailKicker');
+  const detailTitle = document.getElementById('detailTitle');
+  const detailSubtitle = document.getElementById('detailSubtitle');
+  const detailPills = document.getElementById('detailPills');
+  const howList = document.getElementById('howList');
+  const whyList = document.getElementById('whyList');
+  const mermaidWrap = document.getElementById('mermaidWrap');
+  const mermaidFallback = document.getElementById('mermaidFallback');
+  let flowRendered = false;
+
+  function renderDetail(key) {
+    const data = details[key];
+    if (!data) return;
+    cells.forEach(cell => cell.classList.toggle('active', cell.dataset.node === key));
+    detailKicker.textContent = data.kicker;
+    detailTitle.textContent = data.title;
+    detailSubtitle.textContent = data.subtitle;
+    detailPills.innerHTML = data.pills.map(p => `<span class="pill">${p}</span>`).join('');
+    howList.innerHTML = data.how.map(item => `<li>${item}</li>`).join('');
+    whyList.innerHTML = data.why.map(item => `<li>${item}</li>`).join('');
+    showDetailsMode();
+  }
+
+  function showDetailsMode() {
+    detailPanel.classList.remove('flow-mode');
+    detailsTab.classList.add('active');
+    if (flowTab) flowTab.classList.remove('active');
+    detailKicker.textContent = detailKicker.textContent.replace('Flow Example', '');
+  }
+
+  async function showFlowMode() {
+    detailPanel.classList.add('flow-mode');
+    detailsTab.classList.remove('active');
+    if (flowTab) flowTab.classList.add('active');
+    detailKicker.textContent = 'Flow Example';
+    if (!flowRendered) await renderEndToEndFlow();
+  }
+
+  async function renderEndToEndFlow() {
+    mermaidWrap.innerHTML = '';
+    mermaidFallback.style.display = 'none';
+    mermaidFallback.textContent = endToEndFlow;
+    if (!window.mermaid) {
+      mermaidFallback.style.display = 'block';
+      return;
+    }
+    try {
+      const rendered = await mermaid.render('end-to-end-flow-' + Date.now(), endToEndFlow);
+      mermaidWrap.innerHTML = rendered.svg;
+      flowRendered = true;
+    } catch (error) {
+      mermaidFallback.style.display = 'block';
+    }
+  }
+
+
+
+  async function renderFullFlow() {
+    flowFallbackFull.style.display = 'none';
+    flowFallbackFull.textContent = endToEndFlow;
+    mermaidFullWrap.innerHTML = '';
+    if (!window.mermaid) {
+      flowFallbackFull.style.display = 'block';
+      return;
+    }
+    try {
+      const rendered = await mermaid.render('full-page-flow-' + Date.now(), endToEndFlow);
+      mermaidFullWrap.innerHTML = rendered.svg;
+      fullFlowRendered = true;
+    } catch (error) {
+      flowFallbackFull.style.display = 'block';
+    }
+  }
+
+  async function showArchitectureView() {
+    page.classList.remove('flow-active');
+    architectureViewBtn.classList.add('active');
+    fullFlowViewBtn.classList.remove('active');
+  }
+
+  async function showFullFlowView() {
+    page.classList.add('flow-active');
+    architectureViewBtn.classList.remove('active');
+    fullFlowViewBtn.classList.add('active');
+    if (!fullFlowRendered) await renderFullFlow();
+  }
+
+  detailsTab.addEventListener('click', showDetailsMode);
+  if (flowTab) flowTab.addEventListener('click', showFlowMode);
+  architectureViewBtn.addEventListener('click', showArchitectureView);
+  fullFlowViewBtn.addEventListener('click', showFullFlowView);
+  cells.forEach(cell => cell.addEventListener('click', () => renderDetail(cell.dataset.node)));
+  renderDetail('fastapi');
+</script>
+</body>
+</html>
